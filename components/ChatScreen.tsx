@@ -14,7 +14,7 @@ interface ChatScreenProps {
   currentUser: User;
   onBack: () => void;
   onNavigate: (view: string, payload?: any) => void;
-  onSelectChat: (chat: Chat, messageId?: string) => void;
+  onSelectChat: (chat: Chat, messageId?: string, options?: { replyToId?: string }) => void;
   initialMessageId?: string | null;
   initialSearchQuery?: string | null;
   initialReplyToId?: string | null;
@@ -233,11 +233,12 @@ const GroupedImageMessage: React.FC<{
     isSentByMe: boolean;
     senderInfo: any;
     onMediaClick: (message: Message, imageIndex: number) => void;
-    onClick: (message: Message) => void;
+    onClick: (e: React.MouseEvent, message: Message) => void;
+    onLongPress: (e: React.MouseEvent, message: Message) => void;
     chatDetails: Chat;
     currentUser: User;
     onTriggerToast: (message: string) => void;
-}> = ({ group, isSentByMe, senderInfo, onMediaClick, onClick, chatDetails, currentUser, onTriggerToast }) => {
+}> = ({ group, isSentByMe, senderInfo, onMediaClick, onClick, onLongPress, chatDetails, currentUser, onTriggerToast }) => {
     const allImages = useMemo(() => 
         group.messages.flatMap(msg => 
             (msg.imageUrls || []).map((url, imgIndex) => ({
@@ -248,9 +249,17 @@ const GroupedImageMessage: React.FC<{
     const totalImages = allImages.length;
     const lastMessage = group.messages[group.messages.length - 1];
 
-    const isReadByAll = isSentByMe && chatDetails.type === ChatType.Private 
-        ? ((chatDetails.unreadCounts || {})[Object.keys(chatDetails.participants || {}).find(p => p !== currentUser.uid)!] || 0) === 0 
-        : false;
+    const otherUserId = chatDetails.type === ChatType.Private ? Object.keys(chatDetails.participants || {}).find(p => p !== currentUser.uid) : null;
+    const isReadByAll = useMemo(() => {
+        if (!isSentByMe) return false;
+        if (otherUserId) {
+            return !!lastMessage.readBy[otherUserId];
+        }
+        const otherParticipantIds = Object.keys(chatDetails.participants || {}).filter(p => p !== currentUser.uid);
+        if (otherParticipantIds.length === 0) return true;
+        return otherParticipantIds.every(uid => !!lastMessage.readBy[uid]);
+    }, [lastMessage.readBy, isSentByMe, otherUserId, chatDetails.participants, currentUser.uid]);
+
 
     if (totalImages === 0) return null;
 
@@ -261,6 +270,7 @@ const GroupedImageMessage: React.FC<{
         <button 
             key={`${item.msg.id}-${item.imgIndex}`}
             onClick={(e) => { e.stopPropagation(); onMediaClick(item.msg, item.imgIndex); }}
+            onContextMenu={(e) => onLongPress(e, item.msg)}
             className={`relative bg-black/20 overflow-hidden ${className}`}
         >
             <img src={item.url} alt={`image from ${item.msg.id}`} className="w-full h-full object-cover" />
@@ -276,11 +286,12 @@ const GroupedImageMessage: React.FC<{
                 <div className="rounded-2xl overflow-hidden shadow-md max-w-[75%]">
                     <button 
                         onClick={(e) => { e.stopPropagation(); onMediaClick(item.msg, item.imgIndex); }}
+                        onContextMenu={(e) => onLongPress(e, item.msg)}
                         className="relative bg-black/20 block"
                     >
                          <img src={item.url} alt={`image`} className="max-w-full max-h-96 object-contain" />
                          <div className="absolute bottom-1 right-1.5 bg-black/50 rounded-lg px-1.5 py-0.5 backdrop-blur-sm">
-                            <MessageMeta timestamp={item.msg.timestamp} isSentByMe={isSentByMe} isReadByAll={isReadByAll} />
+                            <MessageMeta timestamp={item.msg.timestamp} isEdited={item.msg.isEdited} isSentByMe={isSentByMe} isReadByAll={isReadByAll} />
                         </div>
                          {hasCaption && (
                             <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-black/60 text-white text-sm backdrop-blur-sm">
@@ -298,7 +309,7 @@ const GroupedImageMessage: React.FC<{
         else gridClasses = 'grid grid-cols-2 grid-rows-2 gap-0.5';
 
         return (
-            <div className={`rounded-2xl overflow-hidden shadow-md max-w-[85%] aspect-square ${gridClasses}`}>
+            <div onContextMenu={(e) => onLongPress(e, lastMessage)} className={`rounded-2xl overflow-hidden shadow-md max-w-[85%] aspect-square ${gridClasses}`}>
                {totalImages === 3 ? (
                     <>
                         <ImageButton item={allImages[0]} className="row-span-2 col-span-1" />
@@ -333,13 +344,13 @@ const GroupedImageMessage: React.FC<{
             <div className={`relative flex flex-col ${isSentByMe ? 'items-end' : 'items-start'}`}>
                 {renderGridLayout()}
                 {captionMessage?.text && (
-                     <div className={`px-4 py-2 mt-1 rounded-2xl max-w-[85%] ${isSentByMe ? 'bg-[var(--theme-color-bubble-user-bg)] text-[var(--theme-color-bubble-user-text)] rounded-br-sm' : 'bg-[var(--theme-color-bubble-other-bg)] text-[var(--theme-color-bubble-other-text)] rounded-bl-sm'}`}>
+                     <div onContextMenu={(e) => onLongPress(e, captionMessage)} className={`px-4 py-2 mt-1 rounded-2xl max-w-[85%] ${isSentByMe ? 'bg-[var(--theme-color-bubble-user-bg)] text-[var(--theme-color-bubble-user-text)] rounded-br-sm' : 'bg-[var(--theme-color-bubble-other-bg)] text-[var(--theme-color-bubble-other-text)] rounded-bl-sm'}`}>
                         <LinkifyText text={captionMessage.text} onTriggerToast={onTriggerToast} />
                     </div>
                 )}
                 {totalImages > 1 && (
                     <div className="mt-1 px-1">
-                        <MessageMeta timestamp={lastMessage.timestamp} isSentByMe={isSentByMe} isReadByAll={isReadByAll} />
+                        <MessageMeta timestamp={lastMessage.timestamp} isEdited={lastMessage.isEdited} isSentByMe={isSentByMe} isReadByAll={isReadByAll} />
                     </div>
                 )}
             </div>
@@ -1044,9 +1055,39 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
     }, [chat.id, chat.type, chat.participants, currentUser.uid]);
 
     useEffect(() => {
-        set(ref(db, `chats/${chat.id}/unreadCounts/${currentUser.uid}`), null);
-        set(ref(db, `chats/${chat.id}/unreadMentions/${currentUser.uid}`), null);
-    }, [chat.id, currentUser.uid]);
+        const markAsRead = async () => {
+            const unreadCount = (chatDetails.unreadCounts || {})[currentUser.uid] || 0;
+            const updates: { [key: string]: any } = {};
+    
+            if (unreadCount > 0) {
+                const messagesRef = ref(db, `messages/${chat.id}`);
+                const q = query(messagesRef, orderByChild('timestamp'), limitToLast(unreadCount));
+                const snapshot = await get(q);
+    
+                if (snapshot.exists()) {
+                    snapshot.forEach(child => {
+                        const msg = child.val();
+                        if (!msg.readBy || !msg.readBy[currentUser.uid]) {
+                            updates[`/messages/${chat.id}/${child.key}/readBy/${currentUser.uid}`] = Date.now();
+                        }
+                    });
+                }
+            }
+    
+            if ((chatDetails.unreadCounts || {})[currentUser.uid]) {
+                updates[`/chats/${chat.id}/unreadCounts/${currentUser.uid}`] = null;
+            }
+            if ((chatDetails.unreadMentions || {})[currentUser.uid]) {
+                updates[`/chats/${chat.id}/unreadMentions/${currentUser.uid}`] = null;
+            }
+    
+            if (Object.keys(updates).length > 0) {
+                await update(ref(db), updates);
+            }
+        };
+    
+        markAsRead();
+    }, [chat.id, currentUser.uid, chatDetails.unreadCounts, chatDetails.unreadMentions]);
 
     const scrollToBottom = (behavior: 'smooth' | 'auto' = 'smooth') => {
         if(behavior === 'auto') {
