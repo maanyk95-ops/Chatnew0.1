@@ -1401,7 +1401,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
     };
     
     const handlePinMessage = async (message: Message) => {
-        const senderInfo = chat.participantInfo[message.senderId];
+        const senderInfo = chatDetails.participantInfo[message.senderId];
         const senderName = senderInfo?.displayName || 'Unknown';
         const updates: { [key: string]: any } = {};
     
@@ -2313,7 +2313,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
                     />
                     <ReplyPreview 
                         replyTo={replyTo}
-                        participantInfo={chat.participantInfo}
+                        participantInfo={chatDetails.participantInfo}
                         onCancel={() => setReplyTo(null)}
                     />
 
