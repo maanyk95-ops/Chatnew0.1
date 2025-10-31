@@ -526,7 +526,7 @@ const FullscreenMediaViewer: React.FC<{
                 />
                 {currentIndex > 0 && <button onClick={() => setCurrentIndex(p=>p-1)} className="absolute left-4 p-3 bg-black/50 rounded-full text-white font-bold text-lg hidden md:block">{'<'}</button>}
                 {currentIndex < flatMedia.length - 1 && <button onClick={() => setCurrentIndex(p=>p+1)} className="absolute right-4 p-3 bg-black/50 rounded-full text-white font-bold text-lg hidden md:block">{'>'}</button>}
-            </footer>
+            </div>
             <footer className="flex justify-around p-3">
                  <button onClick={handleDownload} className="flex flex-col items-center space-y-1 text-white"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg><span>Download</span></button>
                  <button onClick={() => onReply(currentItem.message)} className="flex flex-col items-center space-y-1 text-white"><ReplyIcon /><span>Reply</span></button>
