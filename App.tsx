@@ -150,34 +150,53 @@ const GuestHelpForm: React.FC<{ onStart: (details: { name: string, phoneNumber: 
     );
 };
 
+interface ViewState {
+    view: string;
+    selectedChat?: Chat | null;
+    managingChat?: Chat | null;
+    initialMessageId?: string | null;
+    initialSearchQuery?: string | null;
+    initialReplyToId?: string | null;
+    messagesToForward?: Message[] | null;
+    createChatPayload?: { type: ChatType } | null;
+    viewingProfileId?: string | null;
+    adminRightsPayload?: { chat: Chat; user: User } | null;
+    addMembersPayload?: { chat: Chat } | null;
+    helpChatPayload?: { chatId: string; isGuest: boolean; guestName?: string; } | null;
+    paymentPayload?: { plan: PremiumPlan } | null;
+    startInSearchMode?: boolean;
+}
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [managingChat, setManagingChat] = useState<Chat | null>(null);
-  const [initialMessageId, setInitialMessageId] = useState<string | null>(null);
-  const [initialSearchQuery, setInitialSearchQuery] = useState<string | null>(null);
-  const [initialReplyToId, setInitialReplyToId] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState('chatlist');
+  const [viewStack, setViewStack] = useState<ViewState[]>([{ view: 'chatlist' }]);
   const [modalView, setModalView] = useState<string | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>(defaultAppSettings);
   const [isProfileComplete, setIsProfileComplete] = useState(false);
-  const [messagesToForward, setMessagesToForward] = useState<Message[] | null>(null);
-  const [previousView, setPreviousView] = useState('chatlist');
-  const [previousChat, setPreviousChat] = useState<Chat | null>(null);
-  const [createChatPayload, setCreateChatPayload] = useState<{type: ChatType} | null>(null);
-  const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
-  const [adminRightsPayload, setAdminRightsPayload] = useState<{chat: Chat, user: User} | null>(null);
-  const [addMembersPayload, setAddMembersPayload] = useState<{chat: Chat} | null>(null);
   const [sessionToastMessage, setSessionToastMessage] = useState<string | null>(null);
-  const [profileBackTarget, setProfileBackTarget] = useState('chatlist');
-  const [helpChatPayload, setHelpChatPayload] = useState<{ chatId: string; isGuest: boolean; guestName?: string; } | null>(null);
   const [hasUnreadGuestHelp, setHasUnreadGuestHelp] = useState(false);
-  const [paymentPayload, setPaymentPayload] = useState<{ plan: PremiumPlan } | null>(null);
-  
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
+
   const [theme, setTheme] = useState(localStorage.getItem('batchat-theme') || appSettings.defaultTheme);
   const appSettingsRef = useRef(appSettings);
   appSettingsRef.current = appSettings;
+
+  const handleBack = () => {
+    if (viewStack.length > 1) {
+        setViewStack(prev => prev.slice(0, -1));
+    } else {
+        setShowExitConfirmation(true);
+    }
+  };
+
+  const handleExitConfirm = () => {
+      window.close();
+      setShowExitConfirmation(false);
+  };
+
+  const handleExitCancel = () => {
+      setShowExitConfirmation(false);
+  };
 
   useEffect(() => {
     const storedTheme = localStorage.getItem('batchat-theme');
@@ -247,42 +266,18 @@ const App: React.FC = () => {
     const previousUid = previousUserUidRef.current;
     const currentUid = user?.uid;
 
-    if (currentUid && currentUid !== previousUid) {
-        // This is an account switch (login or change)
-        // Reset core navigation state to show the default screen for the new user
-        setCurrentView('chatlist');
-        setSelectedChat(null);
-        setManagingChat(null);
-        setInitialMessageId(null);
-        setInitialSearchQuery(null);
-        setInitialReplyToId(null);
+    const resetNavigation = () => {
+        setViewStack([{ view: 'chatlist' }]);
         setModalView(null);
-        setMessagesToForward(null);
-        setPreviousView('chatlist');
-        setPreviousChat(null);
-        setCreateChatPayload(null);
-        setViewingProfileId(null);
-        setAdminRightsPayload(null);
-        setAddMembersPayload(null);
+    };
+
+    if (currentUid && currentUid !== previousUid) {
+        resetNavigation();
         setJustLoggedIn(true);
     }
     
     if (!currentUid && previousUid) {
-        // User logged out, reset everything
-        setCurrentView('chatlist');
-        setSelectedChat(null);
-        setManagingChat(null);
-        setInitialMessageId(null);
-        setInitialSearchQuery(null);
-        setInitialReplyToId(null);
-        setModalView(null);
-        setMessagesToForward(null);
-        setPreviousView('chatlist');
-        setPreviousChat(null);
-        setCreateChatPayload(null);
-        setViewingProfileId(null);
-        setAdminRightsPayload(null);
-        setAddMembersPayload(null);
+        resetNavigation();
         setJustLoggedIn(false);
         sessionIdRef.current = null;
     }
@@ -454,113 +449,42 @@ const App: React.FC = () => {
         unreadForUser: false
     });
     
-    setHelpChatPayload({
-        chatId: guestId,
-        isGuest: true,
-        guestName: name
-    });
+    const helpChatPayload = { chatId: guestId, isGuest: true, guestName: name };
     setModalView(null);
-    setCurrentView('help_chat');
+    setViewStack([{ view: 'help_chat', helpChatPayload }]);
   };
 
   const handleSelectChat = (chat: Chat, messageId?: string, options?: { searchQuery?: string; replyToId?: string }) => {
-    setPreviousView(currentView);
-    setCurrentView('chat');
-    setSelectedChat(chat);
-    setManagingChat(null);
-    setInitialMessageId(messageId || null);
-    setInitialSearchQuery(options?.searchQuery || null);
-    setInitialReplyToId(options?.replyToId || null);
+    const newViewState: ViewState = {
+        view: 'chat',
+        selectedChat: chat,
+        initialMessageId: messageId || null,
+        initialSearchQuery: options?.searchQuery || null,
+        initialReplyToId: options?.replyToId || null,
+    };
+    setViewStack(prev => [...prev, newViewState]);
   };
   
-  const handleNavigate = (view: string, payload?: any) => {
+  const handleNavigate = (view: string, payload: any = {}) => {
       if (view === 'new_contact') {
         setModalView('new_contact');
         return;
       }
 
-      if (view === 'user_profile' && payload?.userId) {
-        setProfileBackTarget(currentView);
-      }
+      const newViewState: ViewState = { view };
       
-      setPreviousView(currentView);
-      if (selectedChat) {
-          setPreviousChat(selectedChat);
-      }
+      if (view === 'forwarding') newViewState.messagesToForward = payload.messages;
+      if (view === 'create_chat') newViewState.createChatPayload = payload;
+      if (view === 'user_profile') newViewState.viewingProfileId = payload.userId;
+      if (view === 'group_info') newViewState.managingChat = payload.chat;
+      if (view === 'admin_rights') newViewState.adminRightsPayload = payload;
+      if (view === 'add_members') newViewState.addMembersPayload = payload;
+      if (view === 'help_chat' && user) newViewState.helpChatPayload = { chatId: user.uid, isGuest: false };
+      if (view === 'premium_payment') newViewState.paymentPayload = payload;
+      if (view === 'global_search') newViewState.startInSearchMode = true;
 
-      if (view === 'forwarding' && payload?.messages) {
-          setMessagesToForward(payload.messages);
-      } else {
-          setMessagesToForward(null);
-      }
-
-      if (view === 'create_chat') {
-        setCreateChatPayload(payload);
-      }
-      
-      if (view === 'user_profile' && payload?.userId) {
-        setViewingProfileId(payload.userId);
-      } else {
-        setViewingProfileId(null);
-      }
-
-      if (view === 'group_info' && payload?.chat) {
-          setManagingChat(payload.chat);
-      } else if (view !== 'admin_rights' && view !== 'add_members') {
-          setManagingChat(null);
-      }
-
-      if (view === 'admin_rights' && payload?.chat && payload?.user) {
-        setAdminRightsPayload(payload);
-      } else {
-        setAdminRightsPayload(null);
-      }
-
-      if (view === 'add_members' && payload?.chat) {
-        setAddMembersPayload(payload);
-      }
-
-      if (view === 'help_chat' && user) {
-        setHelpChatPayload({ chatId: user.uid, isGuest: false });
-      }
-
-      if (view === 'premium_payment' && payload?.plan) {
-        setPaymentPayload(payload);
-      }
-
-      setSelectedChat(null);
-      setCurrentView(view);
+      setViewStack(prev => [...prev, newViewState]);
   }
-  
-  const handleBackFromForwarding = () => {
-        setMessagesToForward(null);
-        setCurrentView(previousView);
-        setSelectedChat(previousChat);
-  };
-
-  const handleBackFromGroupInfo = () => {
-    if (managingChat) {
-      setCurrentView('chat');
-      setSelectedChat(managingChat);
-      setPreviousView('chatlist');
-      setManagingChat(null);
-      setPreviousChat(null); // also clean this up
-    } else {
-      setCurrentView('chatlist');
-    }
-  };
-
-  const handleBackFromProfile = () => {
-      setViewingProfileId(null);
-      if (profileBackTarget === 'chat' && previousChat) {
-        setCurrentView('chat');
-        setSelectedChat(previousChat);
-        setPreviousView('chatlist'); // a safe reset
-        setPreviousChat(null);
-      } else {
-        setCurrentView(profileBackTarget || 'chatlist');
-      }
-  };
   
   const selectAsset = (asset: ThemedAsset | undefined) => asset?.[theme as 'light' | 'dark'] || asset?.common;
   const selectCustomElement = (themedElement: ThemedCustomElement | undefined): CustomElement | undefined => {
@@ -587,14 +511,13 @@ const App: React.FC = () => {
   const renderLoadingOrLogin = () => (
     <div className="h-screen w-screen bg-gray-100 dark:bg-black flex items-center justify-center">
         <div className="w-full h-full max-w-md mx-auto bg-white dark:bg-[#1e1e1e] relative">
-             {loading ? <div className="text-center text-gray-500 dark:text-gray-400 p-8">Loading...</div> : <LoginScreen appSettings={loginScreenSettings} />}
+             {loading ? <div className="text-center text-gray-500 dark:text-gray-400 p-8">Loading...</div> : <LoginScreen appSettings={loginScreenSettings} onBack={handleBack}/>}
              {!loading && !user && (
                  <button
                     onClick={() => {
                         const guestId = localStorage.getItem('batchat_guest_support_id');
                         if (guestId) {
-                            setHelpChatPayload({ chatId: guestId, isGuest: true });
-                            setCurrentView('help_chat');
+                            handleNavigate('help_chat', { chatId: guestId, isGuest: true });
                         } else {
                             setModalView('guest_help_form');
                         }
@@ -613,13 +536,30 @@ const App: React.FC = () => {
   );
   
   const renderContent = () => {
-      if (currentView === 'help_chat' && helpChatPayload?.isGuest) {
+      const currentViewState = viewStack[viewStack.length - 1] || { view: 'chatlist' };
+      const { 
+          view,
+          selectedChat,
+          managingChat,
+          initialMessageId,
+          initialSearchQuery,
+          initialReplyToId,
+          messagesToForward,
+          createChatPayload,
+          viewingProfileId,
+          adminRightsPayload,
+          addMembersPayload,
+          helpChatPayload,
+          paymentPayload,
+          startInSearchMode,
+      } = currentViewState;
+
+      if (view === 'help_chat' && helpChatPayload?.isGuest) {
           return <HelpChatScreen 
               payload={helpChatPayload} 
               currentUser={null} 
               onBack={() => {
-                  setCurrentView('login'); // Use a non-view to trigger login screen
-                  setHelpChatPayload(null);
+                  setViewStack([{ view: 'chatlist' }]); // Reset stack to show login screen
               }} 
           />;
       }
@@ -631,7 +571,7 @@ const App: React.FC = () => {
       // One-time redirect for admin after login and profile completion
       if (justLoggedIn && user.isAdmin) {
         setTimeout(() => {
-            setCurrentView('admin');
+            handleNavigate('admin');
             setJustLoggedIn(false);
         }, 0);
       } else if (justLoggedIn) {
@@ -648,18 +588,12 @@ const App: React.FC = () => {
       };
 
       const renderMainView = () => {
-        if (currentView === 'chat' && selectedChat) {
+        if (view === 'chat' && selectedChat) {
             return (
               <ChatScreen 
                   chat={selectedChat}
                   currentUser={user as User} 
-                  onBack={() => {
-                      setCurrentView(previousView || 'chatlist');
-                      setSelectedChat(null);
-                      setInitialMessageId(null);
-                      setInitialSearchQuery(null);
-                      setInitialReplyToId(null);
-                  }}
+                  onBack={handleBack}
                   onNavigate={handleNavigate}
                   onSelectChat={handleSelectChat}
                   initialMessageId={initialMessageId}
@@ -671,26 +605,26 @@ const App: React.FC = () => {
             );
         }
         
-        switch (currentView) {
-          case 'create_chat': return <CreateChatScreen currentUser={user} onBack={() => setCurrentView('new_message')} onChatCreated={handleSelectChat} type={createChatPayload?.type || ChatType.Group} />;
-          case 'new_message': return <NewMessageScreen currentUser={user} onBack={() => setCurrentView('chatlist')} onNavigate={handleNavigate} onSelectChat={handleSelectChat} />;
-          case 'admin': return <AdminPanel currentUser={user} onBack={() => setCurrentView('chatlist')} />;
-          case 'settings': return <SettingsScreen currentUser={user} onBack={() => setCurrentView('chatlist')} onNavigate={handleNavigate} />;
-          case 'edit_profile': return <EditProfileScreen currentUser={user} onBack={() => setCurrentView('settings')} />;
-          case 'privacy_security': return <PrivacySecurityScreen currentUser={user} onBack={() => setCurrentView('settings')} />;
-          case 'sticker_store': return <StickerStoreScreen currentUser={user} onBack={() => setCurrentView('settings')} onNavigate={handleNavigate} />;
-          case 'create_sticker_pack': return <CreateStickerPackScreen currentUser={user} onBack={() => setCurrentView('sticker_store')} />;
-          case 'forwarding': return <ForwardScreen messages={messagesToForward!} currentUser={user} onClose={handleBackFromForwarding} onSelectChat={handleSelectChat}/>;
-          case 'user_profile': return <UserProfileScreen userId={viewingProfileId!} currentUser={user} onBack={handleBackFromProfile} onNavigate={handleNavigate} onSelectChat={handleSelectChat} onTriggerToast={triggerToast} />;
-          case 'group_info': return <GroupInfoScreen chat={managingChat!} currentUser={user as User} onBack={handleBackFromGroupInfo} onNavigate={handleNavigate} onSelectChat={handleSelectChat} onTriggerUndo={triggerUndo} />;
-          case 'add_members': return <AddMembersScreen currentUser={user} chat={addMembersPayload!.chat} onBack={() => handleNavigate('group_info', { chat: addMembersPayload!.chat })} />;
-          case 'admin_rights': return <AdminRightsScreen chat={adminRightsPayload!.chat} user={adminRightsPayload!.user} currentUser={user} onBack={() => handleNavigate('group_info', { chat: adminRightsPayload!.chat })} />;
-          case 'add_account': return <LoginScreen appSettings={loginScreenSettings} isAddingAccount={true} onBack={() => setCurrentView('chatlist')} />;
-          case 'archived_chats': return <ArchivedChatsScreen currentUser={user} onBack={() => setCurrentView('chatlist')} onSelectChat={handleSelectChat} onTriggerUndo={triggerUndo} />;
+        switch (view) {
+          case 'create_chat': return <CreateChatScreen currentUser={user} onBack={handleBack} onChatCreated={handleSelectChat} type={createChatPayload?.type || ChatType.Group} />;
+          case 'new_message': return <NewMessageScreen currentUser={user} onBack={handleBack} onNavigate={handleNavigate} onSelectChat={handleSelectChat} />;
+          case 'admin': return <AdminPanel currentUser={user} onBack={handleBack} />;
+          case 'settings': return <SettingsScreen currentUser={user} onBack={handleBack} onNavigate={handleNavigate} />;
+          case 'edit_profile': return <EditProfileScreen currentUser={user} onBack={handleBack} />;
+          case 'privacy_security': return <PrivacySecurityScreen currentUser={user} onBack={handleBack} />;
+          case 'sticker_store': return <StickerStoreScreen currentUser={user} onBack={handleBack} onNavigate={handleNavigate} />;
+          case 'create_sticker_pack': return <CreateStickerPackScreen currentUser={user} onBack={handleBack} />;
+          case 'forwarding': return <ForwardScreen messages={messagesToForward!} currentUser={user} onClose={handleBack} onSelectChat={handleSelectChat}/>;
+          case 'user_profile': return <UserProfileScreen userId={viewingProfileId!} currentUser={user} onBack={handleBack} onNavigate={handleNavigate} onSelectChat={handleSelectChat} onTriggerToast={triggerToast} />;
+          case 'group_info': return <GroupInfoScreen chat={managingChat!} currentUser={user as User} onBack={handleBack} onNavigate={handleNavigate} onSelectChat={handleSelectChat} onTriggerUndo={triggerUndo} />;
+          case 'add_members': return <AddMembersScreen currentUser={user} chat={addMembersPayload!.chat} onBack={handleBack} />;
+          case 'admin_rights': return <AdminRightsScreen chat={adminRightsPayload!.chat} user={adminRightsPayload!.user} currentUser={user} onBack={handleBack} />;
+          case 'add_account': return <LoginScreen appSettings={loginScreenSettings} isAddingAccount={true} onBack={handleBack} />;
+          case 'archived_chats': return <ArchivedChatsScreen currentUser={user} onBack={handleBack} onSelectChat={handleSelectChat} onTriggerUndo={triggerUndo} />;
           case 'global_search': return <ChatListScreen currentUser={user} onSelectChat={handleSelectChat} onNavigate={handleNavigate} appSettings={chatListScreenSettings} onTriggerUndo={triggerUndo} theme={theme} setTheme={setTheme} startInSearchMode={true} />;
-          case 'help_chat': return <HelpChatScreen payload={helpChatPayload!} currentUser={user} onBack={() => setCurrentView('chatlist')} />;
-          case 'premium': return <PremiumScreen currentUser={user} onBack={() => setCurrentView('chatlist')} settings={appSettings.premiumScreen!} onNavigate={handleNavigate} />;
-          case 'premium_payment': return <PaymentScreen currentUser={user} plan={paymentPayload!.plan} settings={appSettings.paymentSettings!} onBack={() => setCurrentView('premium')} onTriggerToast={triggerToast} />;
+          case 'help_chat': return <HelpChatScreen payload={helpChatPayload!} currentUser={user} onBack={handleBack} />;
+          case 'premium': return <PremiumScreen currentUser={user} onBack={handleBack} settings={appSettings.premiumScreen!} onNavigate={handleNavigate} />;
+          case 'premium_payment': return <PaymentScreen currentUser={user} plan={paymentPayload!.plan} settings={appSettings.paymentSettings!} onBack={handleBack} onTriggerToast={triggerToast} />;
           default:
             return <ChatListScreen currentUser={user} onSelectChat={handleSelectChat} onNavigate={handleNavigate} appSettings={chatListScreenSettings} onTriggerUndo={triggerUndo} theme={theme} setTheme={setTheme} />;
         }
@@ -721,6 +655,23 @@ const App: React.FC = () => {
 
         {modalView === 'guest_help_form' && (
             <GuestHelpForm onStart={handleStartGuestHelpChat} onBack={() => setModalView(null)} />
+        )}
+
+        {showExitConfirmation && (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={handleExitCancel}>
+                <div className="bg-white dark:bg-[#2a2a2a] rounded-lg w-full max-w-xs p-6" onClick={e => e.stopPropagation()}>
+                    <h2 className="font-bold text-xl mb-4 text-center">Exit App?</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-6 text-center">Are you sure you want to exit?</p>
+                    <div className="flex justify-between space-x-4">
+                        <button onClick={handleExitCancel} className="w-full bg-gray-200 dark:bg-gray-700 text-black dark:text-white font-bold py-3 rounded-lg">
+                            Cancel
+                        </button>
+                        <button onClick={handleExitConfirm} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg">
+                            Exit
+                        </button>
+                    </div>
+                </div>
+            </div>
         )}
         
         {toastMessage && (
