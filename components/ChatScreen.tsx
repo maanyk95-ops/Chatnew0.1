@@ -1186,8 +1186,17 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
         setSendError(null);
         try {
             const messageData: Partial<Message> = { senderId: currentUser.uid, text, timestamp: serverTimestamp() as any, readBy: { [currentUser.uid]: Date.now() } };
-            // FIX: Add missing senderId property to the replyTo object.
-            if (replyTo) messageData.replyTo = { messageId: replyTo.id, senderId: replyTo.senderId, senderName: chatDetails.participantInfo[replyTo.senderId]?.displayName || 'Unknown', text: replyTo.text || (replyTo.imageUrls ? 'Photo' : (replyTo.stickerUrl ? 'Sticker' : '...')), isPremium: chatDetails.participantInfo[replyTo.senderId]?.isPremium, profileBadgeUrl: chatDetails.participantInfo[replyTo.senderId]?.profileBadgeUrl };
+            if (replyTo) {
+                const replyToSenderInfo = chatDetails.participantInfo[replyTo.senderId];
+                messageData.replyTo = {
+                    messageId: replyTo.id,
+                    senderId: replyTo.senderId,
+                    senderName: replyToSenderInfo?.displayName || 'Unknown',
+                    text: replyTo.text || (replyTo.imageUrls?.length ? 'Photo' : (replyTo.stickerUrl ? 'Sticker' : (replyTo.gifUrl ? 'GIF' : '...'))),
+                    isPremium: replyToSenderInfo?.isPremium ?? false,
+                    profileBadgeUrl: replyToSenderInfo?.profileBadgeUrl || null,
+                };
+            }
             const mentionRegex = /@([a-zA-Z0-9_]+)/g; let match; const mentions: { [uid: string]: boolean } = {}; const unreadMentionsUpdate: { [key: string]: boolean } = {};
             while ((match = mentionRegex.exec(text)) !== null) {
                 const cacheEntry = handleCache[`@${match[1]}`];
@@ -1298,14 +1307,14 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
                 readBy: { [currentUser.uid]: Date.now() }
             };
             if (replyTo) {
-                // FIX: Add missing senderId property to the replyTo object.
+                const replyToSenderInfo = chatDetails.participantInfo[replyTo.senderId];
                 messageData.replyTo = {
                     messageId: replyTo.id,
                     senderId: replyTo.senderId,
-                    senderName: chatDetails.participantInfo[replyTo.senderId]?.displayName || 'Unknown',
-                    text: replyTo.text || (replyTo.imageUrls ? 'Photo' : '...'),
-                    isPremium: chatDetails.participantInfo[replyTo.senderId]?.isPremium, 
-                    profileBadgeUrl: chatDetails.participantInfo[replyTo.senderId]?.profileBadgeUrl
+                    senderName: replyToSenderInfo?.displayName || 'Unknown',
+                    text: replyTo.text || (replyTo.imageUrls?.length ? 'Photo' : (replyTo.stickerUrl ? 'Sticker' : (replyTo.gifUrl ? 'GIF' : '...'))),
+                    isPremium: replyToSenderInfo?.isPremium ?? false,
+                    profileBadgeUrl: replyToSenderInfo?.profileBadgeUrl || null,
                 };
             }
     
