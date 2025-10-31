@@ -212,22 +212,20 @@ const getChatDisplayInfo = (chat: Chat, currentUserId: string) => {
         const memberText = chat.type === ChatType.Channel ? 'subscriber' : 'member';
         return {
             name: chat.name || 'Unnamed Group',
-            photoURL: chat.photoURL,
-            onlineStatus: `${participantCount} ${memberText}${participantCount !== 1 ? 's' : ''}`
+            photoURL: chat.photoURL
         }
     }
     const otherUserId = Object.keys(chat.participants || {}).find(uid => uid !== currentUserId);
     if (!otherUserId) {
-      return { name: 'Unknown User', photoURL: null, onlineStatus: 'offline' };
+      return { name: 'Unknown User', photoURL: null };
     }
     const otherUser = chat.participantInfo?.[otherUserId];
     if (!otherUser) {
-        return { name: 'Unknown User', photoURL: null, onlineStatus: 'offline' };
+        return { name: 'Unknown User', photoURL: null };
     }
     return { 
         name: otherUser.displayName || 'Unknown User', 
-        photoURL: otherUser.photoURL,
-        onlineStatus: 'fetching...'
+        photoURL: otherUser.photoURL
     };
 }
 const GroupedImageMessage: React.FC<{
@@ -1466,15 +1464,39 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
         setActionSheetMessage(null);
     };
 
-    // This is the missing JSX part
-    const { name: headerName, photoURL: headerPhoto, onlineStatus } = getChatDisplayInfo(chatDetails, currentUser.uid);
+    const { name: headerName, photoURL: headerPhoto } = getChatDisplayInfo(chatDetails, currentUser.uid);
+    const onlineStatus = useMemo(() => {
+        if (chat.type !== ChatType.Private) {
+            const participantCount = Object.keys(chatDetails.participants || {}).length;
+            const memberText = chatDetails.type === ChatType.Channel ? 'subscriber' : 'member';
+            return `${participantCount} ${memberText}${participantCount !== 1 ? 's' : ''}`;
+        }
+        if (otherUser) {
+            if (otherUser.isOnline) return 'online';
+            if (otherUser.lastSeen) {
+                 const now = new Date();
+                const lastSeenDate = new Date(otherUser.lastSeen);
+                const diffMillis = now.getTime() - lastSeenDate.getTime();
+                const diffSeconds = Math.round(diffMillis / 1000);
+                const diffMinutes = Math.round(diffSeconds / 60);
+                const diffHours = Math.round(diffMinutes / 60);
 
-    // FIX: Define userId for navigation to user profile.
+                if (diffSeconds < 60) return 'last seen just now';
+                if (diffMinutes < 60) return `last seen ${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+                if (diffHours < 24) return `last seen at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                if (diffHours < 48) return `last seen yesterday at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                return `last seen on ${lastSeenDate.toLocaleDateString()}`;
+            }
+            return 'last seen a long time ago';
+        }
+        return 'fetching...';
+    }, [chat.type, chatDetails, otherUser]);
+
     const userId = useMemo(() => {
         if (chat.type === ChatType.Private) {
             return Object.keys(chat.participants || {}).find(uid => uid !== currentUser.uid);
         }
-        return undefined; // use undefined as it won't be in the payload
+        return undefined;
     }, [chat.type, chat.participants, currentUser.uid]);
 
     return (
@@ -1500,7 +1522,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
 
             <div ref={messageContainerRef} className="flex-1 overflow-y-auto p-4 space-y-2">
                 {/* Message rendering logic will go here */}
-                <p className="text-center text-gray-500 text-sm">This is the chat screen content area.</p>
+                {loading ? <div className="text-center text-gray-500 p-8">Loading messages...</div> : allMessages.map(msg => <div key={msg.id} id={msg.id}>{msg.text}</div>)}
                 <div ref={messagesEndRef} />
             </div>
 
