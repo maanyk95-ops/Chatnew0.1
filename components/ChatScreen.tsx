@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, TouchEvent } from 'react';
 import { db } from '../services/firebase';
-// FIX: Corrected imports to ensure all necessary Firebase methods are available for message querying and pagination.
-import { ref, onValue, off, push, update, serverTimestamp, query, get, limitToLast, set, equalTo, orderByChild, endAt, startAt, onChildAdded, onChildChanged, onChildRemoved, orderByKey } from 'firebase/database';
+import { ref, onValue, off, push, update, serverTimestamp, query, get, limitToLast, set, equalTo, orderByChild, endAt, startAt, onChildAdded, onChildChanged, onChildRemoved } from 'firebase/database';
 import { uploadImage } from '../services/imageUploader';
 import type { User, Chat, Message, StickerPack, Sticker, PrivacySettings } from '../types';
 import { ChatType } from '../types';
@@ -23,11 +22,10 @@ interface ChatScreenProps {
   onTriggerToast: (message: string) => void;
 }
 
-const INITIAL_MESSAGES_LIMIT = 20;
-const OLDER_MESSAGES_LIMIT = 20;
+const INITIAL_MESSAGES_LIMIT = 50;
+const OLDER_MESSAGES_LIMIT = 30;
 const MAX_MESSAGES_IN_MEMORY = 200;
 const RENDER_BATCH_INTERVAL = 300;
-const SCROLL_THROTTLE_DELAY = 300;
 
 
 // --- Sound Effects ---
@@ -102,7 +100,6 @@ const NameWithBadges: React.FC<{
 };
 
 
-// FIX: Define MessageMeta component to render message metadata like timestamp and read status.
 const MessageMeta: React.FC<{
     timestamp: number;
     isEdited?: boolean;
@@ -118,20 +115,16 @@ const MessageMeta: React.FC<{
     );
 };
 
-// FIX: Define getEmojiOnlyData function to check if a string contains only emojis.
 function getEmojiOnlyData(text: string): { isEmojiOnly: boolean; count: number } {
     if (!text || !text.trim()) return { isEmojiOnly: false, count: 0 };
-    try {
-        const segmenter = new (Intl as any).Segmenter('en', { granularity: 'grapheme' });
-        const graphemes = Array.from(segmenter.segment(text.trim())).map((s: { segment: string; index: number; input: string }) => s.segment);
-        const emojiRegex = /\p{Emoji}/u;
-        const allAreEmojis = graphemes.every(g => emojiRegex.test(g));
-        return { isEmojiOnly: allAreEmojis, count: allAreEmojis ? graphemes.length : 0 };
-    } catch (e) {
-        // Fallback for older browsers that don't support Intl.Segmenter
-        const emojiRegex = /^(?:\p{Emoji}(?:\u{FE0F}|\u{1F3FB}|\u{1F3FC}|\u{1F3FD}|\u{1F3FE}|\u{1F3FF})?)+$/u;
-        return { isEmojiOnly: emojiRegex.test(text.trim()), count: text.trim().length };
-    }
+    // This regex is a simplified version but covers a wide range of emojis.
+    const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
+    const noEmojiText = text.replace(emojiRegex, '').replace(/\s/g, '');
+    if (noEmojiText.length > 0) return { isEmojiOnly: false, count: 0 };
+    
+    // Count graphemes for a more accurate emoji count
+    const graphemes = text.match(emojiRegex);
+    return { isEmojiOnly: true, count: graphemes ? graphemes.length : 0 };
 }
 
 const formatDateSeparator = (date: Date): string => {
@@ -552,7 +545,7 @@ const PinnedMessageBar: React.FC<{chat: Chat, onPinClick: (messageId: string) =>
         type PinnedMessageData = { text: string; senderName: string; timestamp: number; pinnedAt: number; isPremium?: boolean; profileBadgeUrl?: string; };
         return Object.entries(chat.pinnedMessages)
             .filter(([, data]) => data) // Filter out null/deleted pins
-            .sort(([, a], [, b]) => ((b as PinnedMessageData).pinnedAt || 0) - ((a as PinnedMessageData).pinnedAt || 0))
+            .sort(([, a], [, b]) => (Number((b as PinnedMessageData).pinnedAt) || 0) - (Number((a as PinnedMessageData).pinnedAt) || 0))
             .map(([id, data]) => ({ id, ...(data as PinnedMessageData) }));
     }, [chat.pinnedMessages]);
     
@@ -745,7 +738,6 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
 
-    // FIX: Define cancelSelection to fix "Cannot find name 'cancelSelection'" error.
     const cancelSelection = () => {
         setSelectionMode(false);
         setSelectedMessages(new Set());
@@ -833,7 +825,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
         };
 
         // Initial Load
-        const initialQuery = query(messagesRef, orderByKey(), limitToLast(INITIAL_MESSAGES_LIMIT));
+        const initialQuery = query(messagesRef, orderByChild('timestamp'), limitToLast(INITIAL_MESSAGES_LIMIT));
         get(initialQuery).then(snapshot => {
             const initialMessages: Message[] = [];
             if (snapshot.exists()) {
@@ -856,8 +848,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             
             // For new messages
             const streamQuery = lastMessage
-                ? query(messagesRef, orderByKey(), startAt(lastMessage.id))
-                : query(messagesRef, orderByKey());
+                ? query(messagesRef, orderByChild('timestamp'), startAt(lastMessage.timestamp))
+                : query(messagesRef, orderByChild('timestamp'));
 
             addedListener = onChildAdded(streamQuery, (snapshot) => {
                  if (snapshot.exists()) {
@@ -960,8 +952,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
     
         const messagesQuery = query(
             ref(db, `messages/${chat.id}`),
-            orderByKey(),
-            endAt(oldestMessage.id),
+            orderByChild('timestamp'),
+            endAt(oldestMessage.timestamp),
             limitToLast(OLDER_MESSAGES_LIMIT + 1)
         );
     
@@ -970,15 +962,13 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             const loadedMessages: Message[] = [];
             snapshot.forEach(childSnapshot => {
                 const message = { id: childSnapshot.key as string, ...childSnapshot.val() } as Message;
-                // Add only if not already loaded and not deleted
                 if (!messageIds.current.has(message.id) && !message.deletedFor?.[currentUser.uid]) {
                     loadedMessages.push(message);
                     messageIds.current.add(message.id);
                 }
             });
-            loadedMessages.sort((a,b) => a.timestamp - b.timestamp);
-    
-            if (snapshot.size < OLDER_MESSAGES_LIMIT + 1) {
+            
+            if (loadedMessages.length < OLDER_MESSAGES_LIMIT) {
                 setHasMore(false);
             }
             setOlderMessages(prev => [...loadedMessages, ...prev]);
@@ -1423,8 +1413,15 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
         const senderName = senderInfo?.displayName || 'Unknown';
         const updates: { [key: string]: any } = {};
     
+        let textForPin = message.text || "Message";
+        if (!message.text) {
+            if (message.stickerUrl) textForPin = "Sticker";
+            else if (message.gifUrl) textForPin = "GIF";
+            else if (message.imageUrls && message.imageUrls.length > 0) textForPin = "Photo";
+        }
+    
         updates[`/chats/${chat.id}/pinnedMessages/${message.id}`] = {
-            text: message.text || (message.stickerUrl ? "Sticker" : (message.gifUrl ? "GIF" : "Image")),
+            text: textForPin,
             senderName: senderName,
             timestamp: message.timestamp,
             pinnedAt: serverTimestamp(),
@@ -1469,7 +1466,75 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
         setActionSheetMessage(null);
     };
 
-    // FIX: Add placeholder return statement and closing brace to fix syntax errors.
-    return null;
+    // This is the missing JSX part
+    const { name: headerName, photoURL: headerPhoto, onlineStatus } = getChatDisplayInfo(chatDetails, currentUser.uid);
+
+    // FIX: Define userId for navigation to user profile.
+    const userId = useMemo(() => {
+        if (chat.type === ChatType.Private) {
+            return Object.keys(chat.participants || {}).find(uid => uid !== currentUser.uid);
+        }
+        return undefined; // use undefined as it won't be in the payload
+    }, [chat.type, chat.participants, currentUser.uid]);
+
+    return (
+        <div className="flex flex-col h-full bg-gray-100 dark:bg-[#0f0f0f] text-black dark:text-white">
+            <header className="flex items-center p-3 border-b border-gray-200 dark:border-gray-800 flex-shrink-0 bg-white/80 dark:bg-[#1e1e1e]/80 backdrop-blur-sm sticky top-0 z-20">
+                <button onClick={onBack} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 -ml-2"><BackIcon /></button>
+                <div 
+                    className="flex items-center space-x-3 ml-2 flex-1 min-w-0 cursor-pointer"
+                    onClick={() => onNavigate(chat.type === ChatType.Private ? 'user_profile' : 'group_info', { userId, chat: chatDetails })}
+                >
+                    <Avatar photoURL={headerPhoto} name={headerName} sizeClass="w-11 h-11" />
+                    <div className="min-w-0">
+                        <p className="font-bold truncate">{headerName}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{onlineStatus}</p>
+                    </div>
+                </div>
+                <div className="flex items-center space-x-1">
+                    <button className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10"><CallIcon /></button>
+                    <button className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10"><SearchIcon /></button>
+                    <button className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10"><MoreVertIcon /></button>
+                </div>
+            </header>
+
+            <div ref={messageContainerRef} className="flex-1 overflow-y-auto p-4 space-y-2">
+                {/* Message rendering logic will go here */}
+                <p className="text-center text-gray-500 text-sm">This is the chat screen content area.</p>
+                <div ref={messagesEndRef} />
+            </div>
+
+            <footer className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1e1e1e] p-2 flex items-end space-x-2">
+                <button className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" onClick={() => fileInputRef.current?.click()}><AttachFileIcon /></button>
+                <textarea
+                    ref={textareaRef}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePrimaryAction(); } }}
+                    placeholder="Message"
+                    rows={1}
+                    className="flex-1 px-4 py-2 bg-gray-100 dark:bg-[#2f2f2f] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[var(--theme-color-primary)] resize-none max-h-32"
+                />
+                <button className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10" onClick={() => setShowEmojiPicker(true)}><StickerIcon /></button>
+                <button
+                    onClick={handlePrimaryAction}
+                    disabled={isSending || (!newMessage.trim() && attachments.length === 0)}
+                    className="w-12 h-12 bg-[var(--theme-color-primary)] text-[var(--theme-text-color)] rounded-full flex items-center justify-center disabled:bg-gray-400 dark:disabled:bg-gray-600 transition-transform duration-150 active:scale-90"
+                >
+                    {isSending ? <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <SendIcon />}
+                </button>
+            </footer>
+             {showEmojiPicker && (
+                <EmojiPicker
+                    currentUser={currentUser}
+                    onClose={() => setShowEmojiPicker(false)}
+                    onSelectEmoji={(emoji) => setNewMessage(m => m + emoji)}
+                    onSelectSticker={handleSendSticker}
+                    onSelectGif={handleSendGif}
+                    onNavigate={onNavigate}
+                />
+            )}
+        </div>
+    );
 };
 export default ChatScreen;

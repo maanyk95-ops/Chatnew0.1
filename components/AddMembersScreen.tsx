@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/firebase';
 import { ref, get, update, push, serverTimestamp } from 'firebase/database';
 import type { User, Chat } from '../types';
+import { ChatType } from '../types';
 import Avatar from './Avatar';
 
 const BackIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>;
@@ -20,34 +21,57 @@ const AddMembersScreen: React.FC<AddMembersScreenProps> = ({ currentUser, chat, 
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        const fetchUsers = async () => {
+        const fetchContacts = async () => {
             setLoading(true);
             try {
-                const usersRef = ref(db, 'users');
-                const usersSnap = await get(usersRef);
-                if (usersSnap.exists()) {
-                    const allUsersData = usersSnap.val();
-                    const allUsers: User[] = Object.keys(allUsersData).map(uid => ({ uid, ...allUsersData[uid] }));
-                    
-                    const potentialMembers = allUsers.filter(user => 
-                        user.uid !== currentUser.uid && !(chat.participants && chat.participants[user.uid])
-                    );
-                    
-                    potentialMembers.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
-                    
-                    setContacts(potentialMembers);
-                } else {
-                    setContacts([]);
+                // Get user's contacts first
+                const userChatsRef = ref(db, `user-chats/${currentUser.uid}`);
+                const userChatsSnap = await get(userChatsRef);
+                const contactUserIds = new Set<string>();
+    
+                if (userChatsSnap.exists()) {
+                    const chatIds = Object.keys(userChatsSnap.val());
+                    for (const chatId of chatIds) {
+                        const chatSnap = await get(ref(db, `chats/${chatId}`));
+                        if (chatSnap.exists()) {
+                            const chatData = chatSnap.val() as Chat;
+                            if (chatData.type === ChatType.Private) {
+                                const otherUserId = Object.keys(chatData.participants).find(p => p !== currentUser.uid);
+                                if (otherUserId) contactUserIds.add(otherUserId);
+                            }
+                        }
+                    }
                 }
+    
+                // Fetch user objects for contacts that are not already members
+                const potentialMemberIds = Array.from(contactUserIds).filter(
+                    uid => !(chat.participants && chat.participants[uid])
+                );
+    
+                if (potentialMemberIds.length === 0) {
+                    setContacts([]);
+                    setLoading(false);
+                    return;
+                }
+    
+                const userPromises = potentialMemberIds.map(uid => get(ref(db, `users/${uid}`)));
+                const userSnapshots = await Promise.all(userPromises);
+                const fetchedContacts = userSnapshots
+                    .filter(snap => snap.exists())
+                    .map(snap => ({ uid: snap.key, ...snap.val() } as User));
+                
+                fetchedContacts.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+                setContacts(fetchedContacts);
+    
             } catch (error) {
-                console.error("Failed to fetch users:", error);
+                console.error("Failed to fetch contacts:", error);
                 setContacts([]);
             } finally {
                 setLoading(false);
             }
         };
         
-        fetchUsers();
+        fetchContacts();
     }, [currentUser.uid, chat.participants]);
 
     const toggleMember = (member: User) => {
