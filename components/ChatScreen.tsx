@@ -662,18 +662,21 @@ const MessageActionSheet: React.FC<MessageActionSheetProps> = (props) => {
     
     const isGroupOrChannel = props.chat.type === ChatType.Group || props.chat.type === ChatType.Channel;
     const isOwner = props.currentUser.uid === props.chat.ownerId;
-    const isAdmin = !!props.chat.admins?.[props.currentUser.uid];
-    const isPrivileged = isOwner || isAdmin;
+    const currentAdminPerms = props.chat.admins?.[props.currentUser.uid];
+
+    // Granular permission checks
+    const canPin = isOwner || !!currentAdminPerms?.canPinMessages;
+    const canDelete = isMyMessage || isOwner || !!currentAdminPerms?.canDeleteMessages;
 
     const actionItems = [
-        { icon: <ReplyIcon/>, label: 'Reply', action: props.onReply, show: isPrivileged || !isGroupOrChannel },
+        { icon: <ReplyIcon/>, label: 'Reply', action: props.onReply, show: true },
         { icon: <CopyIcon/>, label: 'Copy Text', action: props.onCopy, show: !!props.message.text },
-        { icon: <ForwardIcon/>, label: 'Forward', action: props.onForward },
+        { icon: <ForwardIcon/>, label: 'Forward', action: props.onForward, show: true },
         props.isPinned 
-            ? { icon: <UnpinIcon />, label: 'Unpin', action: props.onUnpin, show: isPrivileged || !isGroupOrChannel }
-            : { icon: <PinIcon />, label: 'Pin', action: props.onPin, show: isPrivileged || !isGroupOrChannel },
-        { icon: <EditIcon/>, label: 'Edit', action: props.onEdit, show: isMyMessage && (!isGroupOrChannel || isPrivileged) && !!props.message.text },
-        { icon: <DeleteIcon/>, label: 'Delete', action: props.onDelete, destructive: true, show: !isGroupOrChannel || (isGroupOrChannel && isPrivileged) },
+            ? { icon: <UnpinIcon />, label: 'Unpin', action: props.onUnpin, show: canPin || !isGroupOrChannel }
+            : { icon: <PinIcon />, label: 'Pin', action: props.onPin, show: canPin || !isGroupOrChannel },
+        { icon: <EditIcon/>, label: 'Edit', action: props.onEdit, show: isMyMessage && !!props.message.text },
+        { icon: <DeleteIcon/>, label: 'Delete', action: props.onDelete, destructive: true, show: canDelete || !isGroupOrChannel },
     ];
 
     return (
