@@ -30,7 +30,7 @@ const AddMembersScreen: React.FC<AddMembersScreenProps> = ({ currentUser, chat, 
                     const allUsers: User[] = Object.keys(allUsersData).map(uid => ({ uid, ...allUsersData[uid] }));
                     
                     const potentialMembers = allUsers.filter(user => 
-                        user.uid !== currentUser.uid && !chat.participants[user.uid]
+                        user.uid !== currentUser.uid && !(chat.participants && chat.participants[user.uid])
                     );
                     
                     potentialMembers.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));

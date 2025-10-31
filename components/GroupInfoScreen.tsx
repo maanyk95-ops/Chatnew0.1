@@ -294,13 +294,13 @@ const GroupInfoScreen: React.FC<GroupInfoScreenProps> = ({ chat: initialChat, cu
         );
     }
 
-    const isMember = !!initialChat.participants[currentUser.uid];
+    const isMember = !!(initialChat.participants || {})[currentUser.uid];
     const isChannel = chat.type === ChatType.Channel;
     const isOwner = currentUser.uid === chat.ownerId;
     const currentAdminPerms = chat.admins?.[currentUser.uid];
     const isPrivileged = isOwner || !!currentAdminPerms;
     const canEdit = isOwner || !!currentAdminPerms?.canChangeInfo;
-    const canAddMembers = isOwner || !!currentAdminPerms?.canInviteUsers || chat.permissions?.canAddUsers;
+    const canAddMembers = isOwner || !!currentAdminPerms?.canInviteUsers || (chat.permissions || defaultMemberPermissions).canAddUsers;
     const canManageMembers = isOwner || !!currentAdminPerms?.canBanUsers;
     const canManageAdmins = isOwner || !!currentAdminPerms?.canAddAdmins;
     
@@ -445,7 +445,7 @@ const GroupInfoScreen: React.FC<GroupInfoScreenProps> = ({ chat: initialChat, cu
 
     useEffect(() => {
         setLoading(true);
-        const participantIds = Object.keys(chat.participants);
+        const participantIds = Object.keys(chat.participants || {});
         const userPromises = participantIds.map(uid => get(ref(db, `users/${uid}`)));
         Promise.all(userPromises).then(userSnaps => {
             const usersData = userSnaps
@@ -697,7 +697,7 @@ const GroupInfoScreen: React.FC<GroupInfoScreenProps> = ({ chat: initialChat, cu
                     <Avatar photoURL={chat.photoURL} name={chat.name} sizeClass="w-24 h-24 mb-2" />
                 </button>
                 <h1 className="text-2xl font-bold">{chat.name}</h1>
-                <p className="text-gray-500 dark:text-gray-400">{Object.keys(chat.participants).length} {isChannel ? 'subscriber' : 'member'}{Object.keys(chat.participants).length !== 1 ? 's' : ''}</p>
+                <p className="text-gray-500 dark:text-gray-400">{Object.keys(chat.participants || {}).length} {isChannel ? 'subscriber' : 'member'}{Object.keys(chat.participants || {}).length !== 1 ? 's' : ''}</p>
             </div>
             {isMember ? (
                 <>
@@ -925,7 +925,7 @@ const GroupInfoScreen: React.FC<GroupInfoScreenProps> = ({ chat: initialChat, cu
                 <div className="flex-1 flex flex-col items-center p-8 text-center w-full">
                      <Avatar photoURL={chat.photoURL} name={chat.name} sizeClass="w-32 h-32 mb-4" />
                      <h1 className="text-3xl font-bold">{chat.name}</h1>
-                     <p className="text-gray-500 dark:text-gray-400 mt-2">{Object.keys(chat.participants).length} {isChannel ? 'subscribers' : 'members'}</p>
+                     <p className="text-gray-500 dark:text-gray-400 mt-2">{Object.keys(chat.participants || {}).length} {isChannel ? 'subscribers' : 'members'}</p>
                      <p className="text-gray-600 dark:text-gray-300 mt-4">{chat.description}</p>
                      <div className="mt-auto w-full max-w-xs">
                         <button onClick={handleJoin} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg text-lg">
