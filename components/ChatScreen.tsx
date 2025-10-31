@@ -1210,8 +1210,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             const updates: { [key: string]: any } = {
                 [`/messages/${chat.id}/${newMessageRef.key}`]: messageData,
                 [`/chats/${chat.id}/lastMessage`]: text.substring(0, 100),
-                [`/chats/${chat.id}/lastMessageTimestamp}`]: serverTimestamp(),
-                [`/chats/${chat.id}/lastMessageSenderId}`]: currentUser.uid, ...unreadMentionsUpdate
+                [`/chats/${chat.id}/lastMessageTimestamp`]: serverTimestamp(),
+                [`/chats/${chat.id}/lastMessageSenderId`]: currentUser.uid, ...unreadMentionsUpdate
             };
             Object.keys(chatDetails.participants).forEach(uid => { if (uid !== currentUser.uid) updates[`/chats/${chat.id}/unreadCounts/${uid}`] = (chatDetails.unreadCounts?.[uid] || 0) + 1; });
             await update(ref(db), updates);
@@ -1242,8 +1242,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             const updates: { [key: string]: any } = {
                 [`/messages/${chat.id}/${newMessageRef.key}`]: messageData,
                 [`/chats/${chat.id}/lastMessage`]: 'Sticker',
-                [`/chats/${chat.id}/lastMessageTimestamp}`]: serverTimestamp(),
-                [`/chats/${chat.id}/lastMessageSenderId}`]: currentUser.uid
+                [`/chats/${chat.id}/lastMessageTimestamp`]: serverTimestamp(),
+                [`/chats/${chat.id}/lastMessageSenderId`]: currentUser.uid
             };
             Object.keys(chatDetails.participants).forEach(uid => { if (uid !== currentUser.uid) updates[`/chats/${chat.id}/unreadCounts/${uid}`] = (chatDetails.unreadCounts?.[uid] || 0) + 1; });
             await update(ref(db), updates);
@@ -1266,8 +1266,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             const updates: { [key: string]: any } = {
                 [`/messages/${chat.id}/${newMessageRef.key}`]: messageData,
                 [`/chats/${chat.id}/lastMessage`]: '📷 GIF',
-                [`/chats/${chat.id}/lastMessageTimestamp}`]: serverTimestamp(),
-                [`/chats/${chat.id}/lastMessageSenderId}`]: currentUser.uid
+                [`/chats/${chat.id}/lastMessageTimestamp`]: serverTimestamp(),
+                [`/chats/${chat.id}/lastMessageSenderId`]: currentUser.uid
             };
             Object.keys(chatDetails.participants).forEach(uid => { if (uid !== currentUser.uid) updates[`/chats/${chat.id}/unreadCounts/${uid}`] = (chatDetails.unreadCounts?.[uid] || 0) + 1; });
             await update(ref(db), updates);
@@ -1325,8 +1325,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             const updates: { [key: string]: any } = {};
             updates[`/messages/${chat.id}/${newMessageRef.key}`] = messageData;
             updates[`/chats/${chat.id}/lastMessage`] = `📷 ${newMessage.trim() || 'Image'}`;
-            updates[`/chats/${chat.id}/lastMessageTimestamp}`] = serverTimestamp();
-            updates[`/chats/${chat.id}/lastMessageSenderId}`] = currentUser.uid;
+            updates[`/chats/${chat.id}/lastMessageTimestamp`] = serverTimestamp();
+            updates[`/chats/${chat.id}/lastMessageSenderId`] = currentUser.uid;
     
             Object.keys(chatDetails.participants).forEach(uid => {
                 if (uid !== currentUser.uid) {
@@ -1437,7 +1437,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
         };
     
         updates[`/chats/${chat.id}/lastMessage`] = systemMessageText;
-        updates[`/chats/${chat.id}/lastMessageTimestamp}`] = serverTimestamp();
+        updates[`/chats/${chat.id}/lastMessageTimestamp`] = serverTimestamp();
         
         await update(ref(db), updates);
         setActionSheetMessage(null);
@@ -1457,7 +1457,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ chat, currentUser, onBack, onNa
             systemMessageType: 'message_unpinned',
         };
         updates[`/chats/${chat.id}/lastMessage`] = unpinnedMessageText;
-        updates[`/chats/${chat.id}/lastMessageTimestamp}`] = serverTimestamp();
+        updates[`/chats/${chat.id}/lastMessageTimestamp`] = serverTimestamp();
     
         await update(ref(db), updates);
         setActionSheetMessage(null);

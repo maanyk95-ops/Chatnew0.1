@@ -20,49 +20,34 @@ const AddMembersScreen: React.FC<AddMembersScreenProps> = ({ currentUser, chat, 
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        const fetchContacts = async () => {
+        const fetchUsers = async () => {
             setLoading(true);
-            const userChatsRef = ref(db, `user-chats/${currentUser.uid}`);
-            const userChatsSnap = await get(userChatsRef);
-            if (!userChatsSnap.exists()) {
-                setContacts([]);
-                setLoading(false);
-                return;
-            }
-
-            const chatIds = Object.keys(userChatsSnap.val());
-            const contactUserIds = new Set<string>();
-
-            for (const chatId of chatIds) {
-                const chatSnap = await get(ref(db, `chats/${chatId}`));
-                if (chatSnap.exists()) {
-                    const chatData = chatSnap.val() as Chat;
-                    if (chatData.type === 'private') {
-                        const otherUserId = Object.keys(chatData.participants).find(p => p !== currentUser.uid);
-                        if (otherUserId && !chat.participants[otherUserId]) {
-                            contactUserIds.add(otherUserId);
-                        }
-                    }
+            try {
+                const usersRef = ref(db, 'users');
+                const usersSnap = await get(usersRef);
+                if (usersSnap.exists()) {
+                    const allUsersData = usersSnap.val();
+                    const allUsers: User[] = Object.keys(allUsersData).map(uid => ({ uid, ...allUsersData[uid] }));
+                    
+                    const potentialMembers = allUsers.filter(user => 
+                        user.uid !== currentUser.uid && !chat.participants[user.uid]
+                    );
+                    
+                    potentialMembers.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+                    
+                    setContacts(potentialMembers);
+                } else {
+                    setContacts([]);
                 }
+            } catch (error) {
+                console.error("Failed to fetch users:", error);
+                setContacts([]);
+            } finally {
+                setLoading(false);
             }
-
-            if (contactUserIds.size === 0) {
-                 setContacts([]);
-                 setLoading(false);
-                 return;
-            }
-
-            const userPromises = Array.from(contactUserIds).map(uid => get(ref(db, `users/${uid}`)));
-            const userSnapshots = await Promise.all(userPromises);
-            const fetchedContacts = userSnapshots
-                .filter(snap => snap.exists())
-                .map(snap => snap.val() as User);
-                
-            setContacts(fetchedContacts);
-            setLoading(false);
         };
         
-        fetchContacts();
+        fetchUsers();
     }, [currentUser.uid, chat.participants]);
 
     const toggleMember = (member: User) => {
