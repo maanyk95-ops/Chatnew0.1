@@ -127,9 +127,9 @@ const CreateChatScreen: React.FC<CreateChatScreenProps> = ({ currentUser, onBack
                     displayName: currentUser.displayName || 'User',
                     photoURL: currentUser.photoURL || null,
                     handle: currentUser.handle || '',
-                    profileBadgeUrl: currentUser.profileBadgeUrl,
-                    nameplateStatusUrl: currentUser.nameplateStatusUrl,
-                    isPremium: currentUser.isPremium,
+                    profileBadgeUrl: currentUser.profileBadgeUrl || null,
+                    nameplateStatusUrl: currentUser.nameplateStatusUrl || null,
+                    isPremium: currentUser.isPremium || false,
                     joinedAt: serverTimestamp()
                 },
                 ...selectedMembers.reduce((acc, member) => {
@@ -137,9 +137,9 @@ const CreateChatScreen: React.FC<CreateChatScreenProps> = ({ currentUser, onBack
                         displayName: member.displayName || 'User',
                         photoURL: member.photoURL || null,
                         handle: member.handle || '',
-                        profileBadgeUrl: member.profileBadgeUrl,
-                        nameplateStatusUrl: member.nameplateStatusUrl,
-                        isPremium: member.isPremium,
+                        profileBadgeUrl: member.profileBadgeUrl || null,
+                        nameplateStatusUrl: member.nameplateStatusUrl || null,
+                        isPremium: member.isPremium || false,
                         joinedAt: serverTimestamp()
                     };
                     return acc;
